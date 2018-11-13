@@ -7,8 +7,8 @@ g=9
 p=101
 
 def getDHkey(prKey):
-    ComputedKey = (g**prKey) % p
+    ComputedKey = (int(g)**int(prKey)) % p
     return ComputedKey
 
 def getSessionKey(compKey, prDHkey):
-    return ((compKey**prDHkey)%p)
+    return str(((int(compKey)**int(prDHkey))%p))

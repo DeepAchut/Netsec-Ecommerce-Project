@@ -46,26 +46,25 @@ class User:
             #Setting up socket
             server = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
             server.connect((ip,port))
-            while True:
-                server.send("User")
-                brokerPbKey = exchangePublicKey(server, self.pukey)
-                if brokerPbKey:
-                    print "User - Broker Key exchange successful"
-                    #Diffie-Hellman Key Exchange Starts here
-                    sendData(getDHkey(self.prDHKey), server, brokerPbKey)
-                    data = decryptMsg(server.recv(1024), key)
-                    nounce = getSessionKey(data, self.prDHKey)
-                    sendData(getHash(nounce), server, brokerPbKey)
-                    ack = decryptMsg(server.recv(1024), key)
-                    if ack == "ACK":
-                        print "DH Authentication successful"
-                        inp = raw_input("Enter the Seller IP address & port (format: ipaddress:port): ")
-                        sendData(inp, server, brokerPbKey)
-                    else:
-                        sendData("Error", server, brokerPbKey)
+            server.send("User")
+            brokerPbKey = exchangePublicKey(server, self.pukey)
+            if brokerPbKey:
+                print "User - Broker Key exchange successful"
+                #Diffie-Hellman Key Exchange Starts here
+                sendData(getDHkey(self.prDHKey), server, brokerPbKey)
+                data = decryptMsg(server.recv(1024), key)
+                nounce = getSessionKey(data, self.prDHKey)
+                sendData(getHash(nounce), server, brokerPbKey)
+                ack = decryptMsg(server.recv(1024), key)
+                if ack == "ACK":
+                    print "DH Authentication successful"
+                    inp = raw_input("Enter the Seller IP address: ")
+                    sendData(inp, server, brokerPbKey)
                 else:
-                    print "Improper Broker Public key"
-                    break
+                    sendData("Error", server, brokerPbKey)
+            else:
+                print "Improper Broker Public key"
+                server.close()
         except Exception as e:
             print e
-                                
+            server.close()

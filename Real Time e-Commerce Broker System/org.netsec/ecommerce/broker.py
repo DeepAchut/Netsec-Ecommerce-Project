@@ -6,15 +6,17 @@ Created on 06-Nov-2018
 import random
 import socket
 import thread
+import time
 
 from HashGenerator import getHash
 from RSAencryption import generateRSAkey, decryptMsg
 from RSAencryption import sendData
 from diffiehellman import getSessionKey, getDHkey
 
+
 prDHkey = random.randint(2,6)
 
-def exchangeRSAPbKey(server,key):
+def exchangeUserRSAPbKey(server,key):
     senderkey = ""
     try:
         server.send(key + ";" + getHash(key))
@@ -35,11 +37,31 @@ def exchangeRSAPbKey(server,key):
         print e
     return senderkey
 
+def exchangeSellerRSAPbKey(server,key):
+    senderkey = ""
+    try:
+        temp = server.recv(2048)
+        if temp != "":
+            print "User Pb Key + hash received from User"
+            print temp
+            data = temp.split(";")[0]
+            dataHash = temp.split(";")[1]
+            if getHash(data) == dataHash:
+                server.send(key + ";" + getHash(key))
+                print "Seller public key hash recieved by Broker"
+                senderkey = data
+            else:
+                print "Sender Pb key doesn't match it's hash"
+    except Exception as e:
+        print "Unable to get broker public key"
+        print e
+    return senderkey
+
 def onUserConnect(client,addr):
     try:
         key = generateRSAkey()
         pukey = key.publickey().exportKey()
-        userPbKey = exchangeRSAPbKey(client, pukey)
+        userPbKey = exchangeUserRSAPbKey(client, pukey)
         if userPbKey:
             #Diffie-Hellman Key Exchange Starts here
             data = decryptMsg(client.recv(1024), key)
@@ -48,21 +70,47 @@ def onUserConnect(client,addr):
             userNounceHash = decryptMsg(client.recv(1024), key)
             if userNounceHash == nounceHash:
                 sendData("ACK", client, userPbKey)
-                data = decryptMsg(client.recv(1024), key)
+                ipadd = decryptMsg(client.recv(1024), key)
                 if "Error" not in data:
                     #DH Authentication Successful and Now can transmit messages
-                    print data
+                    #Now get Seller Ip address from the user and connect to the Seller
+                    print ipadd
+                    try:
+                        brokerRsaKey = generateRSAkey()
+                        brokerPuKey = brokerRsaKey.publickey().exportKey()
+                        server = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+                        port = 55553
+                        server.connect((ipadd,port))
+                        server.send("Broker") 
+                        sellerPbKey = exchangeSellerRSAPbKey(server, brokerPuKey)
+                        if sellerPbKey:
+                            #Diffie-Hellman Key Exchange Starts here
+                            sendData(getDHkey(prDHkey), server, sellerPbKey)
+                            print "Broker - Seller Key Exchange successful"
+                            print "DH exchange starts"
+                            data = decryptMsg(server.recv(1024), brokerRsaKey)
+                            nounce = getSessionKey(data, prDHkey)
+                            sendData(getHash(nounce), server, sellerPbKey)
+                            ack = decryptMsg(server.recv(1024), brokerRsaKey)
+                            if ack == "ACK":
+                                print "DH Authentication successful"
+                                sendData("Authentication done", server, sellerPbKey)
+                            else:
+                                sendData("Error", server, sellerPbKey)
+                    except Exception as e:
+                        print e
+                        print "Unable to connect Seller. Check Seller Ip Address or Port"
+                    
                 else:
-                    "Nounce didn't match between user and brokers"
+                    print "Nounce didn't match between user and brokers"
             else:
                 print "Nounce exchange failed"          
     except Exception as e:
         print "Unable to process user message in broker"
-        print e  
-    return 0
+        print e
+    return None
 
 class Broker:
-    
     def __init__(self):
         try:
             server = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
@@ -85,4 +133,4 @@ class Broker:
                     client.close()
         except Exception as e:
             print e
-            print "Unable to start server. Check Server Address or Port"
+            print "Unable to start broker server. Check Server Address or Port"

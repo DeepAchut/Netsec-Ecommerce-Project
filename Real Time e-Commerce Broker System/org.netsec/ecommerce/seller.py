@@ -6,13 +6,14 @@ Created on 13-Nov-2018
 import random
 import socket
 import thread
+import time
 
 from HashGenerator import getHash
 from RSAencryption import generateRSAkey, decryptMsg
 from RSAencryption import sendData
 from diffiehellman import getSessionKey, getDHkey
+from AESCipher import AESCipher
 
-prDHkey = random.randint(2,6)
 
 def exchangeRSAPbKey(server,key):
     senderkey = ""
@@ -40,20 +41,42 @@ def onBrokerConnect(client,addr):
         key = generateRSAkey()
         pukey = key.publickey().exportKey()
         brokerPbKey = exchangeRSAPbKey(client, pukey)
+        prDHkey = random.randint(2,6)
         if brokerPbKey:
             print "Received Seller Public key"
             #Diffie-Hellman Key Exchange Starts here
             data = decryptMsg(client.recv(1024), key)
             sendData(getDHkey(prDHkey), client, brokerPbKey)
             nounceHash = getHash(getSessionKey(data, prDHkey))
-            userNounceHash = decryptMsg(client.recv(1024), key)
-            if userNounceHash == nounceHash:
+            brokerNounceHash = decryptMsg(client.recv(1024), key)
+            if brokerNounceHash == nounceHash:
                 sendData("ACK", client, brokerPbKey)
-                data = decryptMsg(client.recv(1024), key)
-                if "Error" not in data:
+                data = client.recv(2048)
+                if data and "Error" not in data:
                     #DH Authentication Successful and Now can transmit messages
-                    print data
-                    print "Reached End"
+                    userPbKey = data
+                    print "Received User key in Seller"
+                    print userPbKey
+                    client.send("ACK")
+                    data = decryptMsg(client.recv(1024), key)
+                    prDHkey = random.randint(5,10)
+                    sessionKey = getSessionKey(data, prDHkey)
+                    nounceHash = getHash(sessionKey)
+                    sendData(str(getDHkey(prDHkey))+"~"+str(nounceHash), client, userPbKey)
+                    time.sleep(2.2)
+                    broucher = """Below are the paintings available to buy
+                        Sr no.            Model                     Price
+                        1)                Mona Lisa                 $970
+                        2)                The Starry Night          $880
+                        3)                The Night Watch           $920
+                        4)                Impression, Sunrise       $810"""
+                    encryptMsg = AESCipher(sessionKey).encrypt(broucher)
+                    client.send(encryptMsg)
+                    data = client.recv(1024)
+                    userinp = AESCipher(sessionKey).decrypt(data)
+                    print userinp
+                    input_file = open("sellerImg/"+userinp+".jpg")
+                    
                 else:
                     print "Nounce didn't match between user and brokers"
             else:

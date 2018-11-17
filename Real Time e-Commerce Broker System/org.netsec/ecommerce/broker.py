@@ -83,6 +83,8 @@ def onUserConnect(client,addr):
                         server.connect((ipadd,port))
                         server.send("Broker") 
                         sellerPbKey = exchangeSellerRSAPbKey(server, brokerPuKey)
+                        print "Seller Pb Key received"
+                        print sellerPbKey
                         if sellerPbKey:
                             #Diffie-Hellman Key Exchange Starts here
                             sendData(getDHkey(prDHkey), server, sellerPbKey)
@@ -94,20 +96,42 @@ def onUserConnect(client,addr):
                             ack = decryptMsg(server.recv(1024), brokerRsaKey)
                             if ack == "ACK":
                                 print "DH Authentication successful"
-                                sendData("Authentication done", server, sellerPbKey)
+                                server.send(userPbKey)
+                                client.send(sellerPbKey)
+                                ackUser = client.recv(3)
+                                ackSeller = server.recv(1024)
+                                print ackSeller
+                                print ackUser
+                                if ackUser == "ACK" and ackSeller == "ACK":
+                                    data = client.recv(1024)
+                                    server.send(data)
+                                    print "Nounce exchange in Process between Seller and User"
+                                    data = server.recv(2048)
+                                    client.send(data)
+                                    broucher = server.recv(2048)
+                                    client.send(broucher)
+                                    userinp = client.recv(1024)
+                                    server.send(userinp)
+                                else:
+                                    print "Unable to get acks for public key exchange between seller and user"
+                                    server.close()
+                                    client.close()
                             else:
                                 sendData("Error", server, sellerPbKey)
                     except Exception as e:
                         print e
                         print "Unable to connect Seller. Check Seller Ip Address or Port"
-                    
+                        client.close()
                 else:
                     print "Nounce didn't match between user and brokers"
+                    client.close()
             else:
-                print "Nounce exchange failed"          
+                print "Nounce exchange failed"      
+                client.close()    
     except Exception as e:
         print "Unable to process user message in broker"
         print e
+        client.close()
     return None
 
 class Broker:

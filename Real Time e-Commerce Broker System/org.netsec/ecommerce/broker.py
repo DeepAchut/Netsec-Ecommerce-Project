@@ -3,11 +3,14 @@ Created on 06-Nov-2018
 
 @author: deepk
 '''
+import os
 import random
 import socket
 import thread
 import time
 
+from AESCipher import AESCipher
+from AESsignature import verifySign
 from HashGenerator import getHash
 from RSAencryption import generateRSAkey, decryptMsg
 from RSAencryption import sendData
@@ -66,7 +69,8 @@ def onUserConnect(client,addr):
             #Diffie-Hellman Key Exchange Starts here
             data = decryptMsg(client.recv(1024), key)
             sendData(getDHkey(prDHkey), client, userPbKey)
-            nounceHash = getHash(getSessionKey(data, prDHkey))
+            userBrokerNounce = getSessionKey(data, prDHkey)
+            nounceHash = getHash(userBrokerNounce)
             userNounceHash = decryptMsg(client.recv(1024), key)
             if userNounceHash == nounceHash:
                 sendData("ACK", client, userPbKey)
@@ -79,8 +83,8 @@ def onUserConnect(client,addr):
                         brokerRsaKey = generateRSAkey()
                         brokerPuKey = brokerRsaKey.publickey().exportKey()
                         server = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-                        port = 55553
-                        server.connect((ipadd,port))
+                        port = int(ipadd.split(":")[1])
+                        server.connect((ipadd.split(":")[0],port))
                         server.send("Broker") 
                         sellerPbKey = exchangeSellerRSAPbKey(server, brokerPuKey)
                         print "Seller Pb Key received"
@@ -112,6 +116,28 @@ def onUserConnect(client,addr):
                                     client.send(broucher)
                                     userinp = client.recv(1024)
                                     server.send(userinp)
+                                    price = server.recv(1024)
+                                    client.send(price)
+                                    data = AESCipher(userBrokerNounce).decrypt(client.recv(1024))
+                                    dbTransact = data.split("~")[0]
+                                    if "No Purchase" not in data and verifySign(dbTransact, userPbKey, data.split("~")[1]):
+                                        price = dbTransact.split(";")[1]
+                                        if price:
+                                            confFile = open(os.path.join(os.path.abspath('.\\paymentDB'),"payment.csv"), "a")
+                                            data = str(dbTransact)
+                                            confFile.write(dbTransact.replace(";",","))
+                                            confFile.close()                                            
+                                            sendData("Paid "+str(price), server, sellerPbKey)
+                                            size = server.recv(1024)
+                                            client.send(size)
+                                            data = client.recv(1024)
+                                            server.send(data)
+                                            img = server.recv(40960000)
+                                            client.send(img)
+                                    else:
+                                        print "Purchase Aborted. Closing the Servers"
+                                        client.close()
+                                        server.close()
                                 else:
                                     print "Unable to get acks for public key exchange between seller and user"
                                     server.close()
@@ -138,7 +164,7 @@ class Broker:
     def __init__(self):
         try:
             server = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-            port = 55552
+            port = int(raw_input("Enter port to start broker server: "))
             server.bind(('',port))
             print "socket binded to %s" %(port)
             server.listen(5)

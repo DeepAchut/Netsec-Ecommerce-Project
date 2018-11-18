@@ -112,13 +112,15 @@ def onUserConnect(client,addr):
                                     print "Nounce exchange in Process between Seller and User"
                                     data = server.recv(2048)
                                     client.send(data)
+                                    ack = client.recv(1024)
+                                    server.send(ack)
                                     broucher = server.recv(2048)
                                     client.send(broucher)
                                     userinp = client.recv(1024)
                                     server.send(userinp)
                                     price = server.recv(1024)
                                     client.send(price)
-                                    data = AESCipher(userBrokerNounce).decrypt(client.recv(1024))
+                                    data = AESCipher(nounceHash).decrypt(client.recv(1024))
                                     dbTransact = data.split("~")[0]
                                     if "No Purchase" not in data and verifySign(dbTransact, userPbKey, data.split("~")[1]):
                                         price = dbTransact.split(";")[1]
@@ -126,6 +128,7 @@ def onUserConnect(client,addr):
                                             confFile = open(os.path.join(os.path.abspath('.\\paymentDB'),"payment.csv"), "a")
                                             data = str(dbTransact)
                                             confFile.write(dbTransact.replace(";",","))
+                                            confFile.write("\n")
                                             confFile.close()                                            
                                             sendData("Paid "+str(price), server, sellerPbKey)
                                             size = server.recv(1024)
@@ -134,6 +137,8 @@ def onUserConnect(client,addr):
                                             server.send(data)
                                             img = server.recv(40960000)
                                             client.send(img)
+                                            client.close()
+                                            server.close()
                                     else:
                                         print "Purchase Aborted. Closing the Servers"
                                         client.close()

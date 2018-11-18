@@ -74,6 +74,8 @@ class User:
                     sellerNounce = decryptMsg(server.recv(2048), key)
                     nounce = getSessionKey(sellerNounce.split("~")[0], prDHKey)
                     if getHash(nounce) == sellerNounce.split("~")[1]:
+                        data = AESCipher(nounce).encrypt("NOUNCE VERIFIED")
+                        server.send(data)
                         data = server.recv(2048)
                         broucher = AESCipher(nounce).decrypt(data)
                         print broucher
@@ -91,7 +93,7 @@ class User:
                         dbTransact = str(self.id+";"+price+";"+sellerId+";"+date)
                         sign = signData(dbTransact, self.prkey)
                         if inp == "Y":
-                            data = AESCipher(brokerSessionKey).encrypt(dbTransact+"~"+sign)
+                            data = AESCipher(getHash(brokerSessionKey)).encrypt(dbTransact+"~"+sign)
                             server.send(data)
                             data = server.recv(2048)
                             imgSize = AESCipher(nounce).decrypt(data)
@@ -108,12 +110,15 @@ class User:
                                 output_file = open("Output/output_"+self.id+".jpg", "wb")
                                 output_file.write(imageString.decode('base64'))
                                 output_file.close()
+                                server.close()
                             else:
                                 print "Error in getting image size"
                                 server.close()
                         else:
                             sendData("No Purchase", server, key)
                     else:
+                        data = AESCipher(nounce).encrypt("NOUNCE MISMATCH")
+                        server.send(data)
                         print "Unable to authenticate seller"
                         server.close()                
                 else:

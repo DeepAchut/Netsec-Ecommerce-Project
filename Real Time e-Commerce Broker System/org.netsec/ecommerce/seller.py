@@ -64,45 +64,54 @@ def onBrokerConnect(client,addr,sellerId):
                     sessionKey = getSessionKey(data, prDHkey)
                     nounceHash = getHash(sessionKey)
                     sendData(str(getDHkey(prDHkey))+"~"+str(nounceHash), client, userPbKey)
-                    time.sleep(2)
-                    broucher = """Below are the paintings available to buy
-                        Sr no.            Model                     Price
-                        1)                Mona Lisa                 $970
-                        2)                The Starry Night          $880
-                        3)                The Night Watch           $920
-                        4)                Impression, Sunrise       $810"""
-                    encryptMsg = AESCipher(sessionKey).encrypt(broucher)
-                    client.send(encryptMsg)
                     data = client.recv(1024)
-                    userinp = AESCipher(sessionKey).decrypt(data)
-                    userinp = int(userinp)
-                    price = 0
-                    if userinp == 1:
-                        price = 970
-                    elif userinp == 2:
-                        price = 880
-                    elif userinp == 3:
-                        price = 920
-                    elif userinp == 4:
-                        price = 810
-                    data = AESCipher(sessionKey).encrypt(str(price)+";"+str(sellerId))
-                    client.send(data)
-                    data = decryptMsg(client.recv(1024), key)
-                    if ("Paid "+str(price)) in data:
-                        jpgdata = ''
-                        inf = open('sellerImg/'+str(userinp)+'.jpg', 'rb')
-                        jpgdata = base64.b64encode(inf.read())
-                        size = len(jpgdata)
-                        client.send(AESCipher(sessionKey).encrypt("SIZE %s" % size))
-                        ackSize = AESCipher(sessionKey).decrypt(client.recv(1024))
-                        if str(ackSize) == "GOT SIZE":
-                            encryptMsg = AESCipher(sessionKey).encrypt(jpgdata)
-                            client.send(encryptMsg)
-                        inf.close()
+                    ack = AESCipher(sessionKey).decrypt(data)
+                    if ack == "NOUNCE VERIFIED":
+                        print "Seller Authentication by User completed"
+                        broucher = """Below are the paintings available to buy
+                            Sr no.            Model                     Price
+                            1)                Mona Lisa                 $970
+                            2)                The Starry Night          $880
+                            3)                The Night Watch           $920
+                            4)                Impression, Sunrise       $810"""
+                        encryptMsg = AESCipher(sessionKey).encrypt(broucher)
+                        client.send(encryptMsg)
+                        data = client.recv(1024)
+                        userinp = AESCipher(sessionKey).decrypt(data)
+                        userinp = int(userinp)
+                        price = 0
+                        if userinp == 1:
+                            price = 970
+                        elif userinp == 2:
+                            price = 880
+                        elif userinp == 3:
+                            price = 920
+                        elif userinp == 4:
+                            price = 810
+                        data = AESCipher(sessionKey).encrypt(str(price)+";"+str(sellerId))
+                        client.send(data)
+                        data = decryptMsg(client.recv(1024), key)
+                        if ("Paid "+str(price)) in data:
+                            jpgdata = ''
+                            inf = open('sellerImg/'+str(userinp)+'.jpg', 'rb')
+                            jpgdata = base64.b64encode(inf.read())
+                            size = len(jpgdata)
+                            client.send(AESCipher(sessionKey).encrypt("SIZE %s" % size))
+                            ackSize = AESCipher(sessionKey).decrypt(client.recv(1024))
+                            if str(ackSize) == "GOT SIZE":
+                                encryptMsg = AESCipher(sessionKey).encrypt(jpgdata)
+                                client.send(encryptMsg)
+                            inf.close()
+                            client.close()
+                    else:
+                        print "Seller Authentication by user failed"
+                        client.close()
                 else:
                     print "Nounce didn't match between user and brokers"
+                    client.close()
             else:
-                print "Nounce exchange failed"          
+                print "Nounce exchange failed"
+                client.close()          
     except Exception as e:
         print "Unable to process user message in broker"
         print e  

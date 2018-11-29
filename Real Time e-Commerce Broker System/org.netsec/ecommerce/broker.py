@@ -106,7 +106,7 @@ def onUserConnect(client,userBrokerNounce, userPbKey, pukey, prkey):
                 print "User authenticated Seller"
                 price = dbTransact.split(";")[0]
                 if price:
-                    confFile = open(os.path.join(os.path.abspath('.\\paymentDB'),"payment.csv"), "a")
+                    confFile = open(os.path.join(os.path.abspath('paymentDB'),"payment.csv"), "a")
                     data = str(getHash(pukey)+";"+dbTransact+";"+date+";"+sign+";"+sellerPbKey)
                     confFile.write(data.replace(";",","))
                     confFile.write("\n")

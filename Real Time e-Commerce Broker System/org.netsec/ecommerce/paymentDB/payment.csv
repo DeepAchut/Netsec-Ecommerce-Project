@@ -1,4 +1,5 @@
-client id,price,seller Id, date and time
-C52,880,S18,2018-11-18 01:19:45
-C14,920,S16,2018-11-18 01:28:15
-C10,810,S68,2018-11-18 01:42:30
+id, price, date and time, client signature, seller Id
+
+810
+880
+970

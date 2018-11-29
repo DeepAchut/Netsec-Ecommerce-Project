@@ -1,8 +1,11 @@
-from hashlib import md5
 from base64 import b64decode
 from base64 import b64encode
+from hashlib import md5
+
 from Crypto import Random
 from Crypto.Cipher import AES
+
+from HashGenerator import getHash
 
 
 # Padding for the input string --not
@@ -12,6 +15,37 @@ pad = lambda s: s + (BLOCK_SIZE - len(s) % BLOCK_SIZE) * \
                 chr(BLOCK_SIZE - len(s) % BLOCK_SIZE)
 unpad = lambda s: s[:-ord(s[len(s) - 1:])]
 
+def sendAESData(msg, server, nounce):
+    try:
+        hash = getHash(msg)
+        data = str(msg) + ";" + str(hash)
+        encrypt = AESCipher(nounce).encrypt(data)
+        server.send(encrypt)
+    except Exception as e:
+        print "Unable to send AES encrypted data"
+        print e
+    return 0
+
+def verifyMsg(data, hash):
+    flag = False
+    if hash == getHash(data):
+        flag = True
+    else:
+        flag = False
+    return flag
+
+def decryptAESData(msg, nounce):
+    rdata = ""
+    try:
+        decrypt = AESCipher(nounce).decrypt(str(msg))
+        data = decrypt.split(";")[0]
+        hash = decrypt.split(";")[1]
+        if verifyMsg(data, hash):
+            rdata = data
+    except Exception as e:
+        print "Unable to decrypt AES encrypted message"
+        print e        
+    return rdata
 
 class AESCipher:
     """

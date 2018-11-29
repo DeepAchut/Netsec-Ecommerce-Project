@@ -7,22 +7,21 @@ import base64
 import random
 import socket
 import thread
-import time
 
-from AESCipher import AESCipher
 from HashGenerator import getHash
-from RSAencryption import generateRSAkey, decryptMsg
+from RSAencryption import decryptMsg
 from RSAencryption import sendData
 from diffiehellman import getSessionKey, getDHkey
+from AESCipher import sendAESData, decryptAESData
 
 
 def exchangeRSAPbKey(server,key):
     senderkey = ""
     try:
         server.send(key + ";" + getHash(key))
-        temp = server.recv(2048)
+        temp = server.recv(1024)
         if temp != "":
-            print "User Pb Key + hash received from User"
+            print "Broker Pb Key + hash received from User"
             print temp
             data = temp.split(";")[0]
             dataHash = temp.split(";")[1]
@@ -37,90 +36,73 @@ def exchangeRSAPbKey(server,key):
         print e
     return senderkey
 
-def onBrokerConnect(client,addr,sellerId):
+def onBrokerConnect(client,pukey,prkey):
     try:
-        key = generateRSAkey()
-        pukey = key.publickey().exportKey()
         brokerPbKey = exchangeRSAPbKey(client, pukey)
         prDHkey = random.randint(100,1000)
         if brokerPbKey:
-            print "Received Seller Public key"
+            print "Received Broker Public key"
             #Diffie-Hellman Key Exchange Starts here
-            data = decryptMsg(client.recv(1024), key)
+            data = decryptMsg(client.recv(1024), prkey)
+            print data
             sendData(getDHkey(prDHkey), client, brokerPbKey)
-            nounceHash = getHash(getSessionKey(data, prDHkey))
-            brokerNounceHash = decryptMsg(client.recv(1024), key)
-            if brokerNounceHash == nounceHash:
-                sendData("ACK", client, brokerPbKey)
-                data = client.recv(2048)
-                if data and "Error" not in data:
-                    #DH Authentication Successful and Now can transmit messages
-                    userPbKey = data
-                    print "Received User key in Seller"
-                    print userPbKey
-                    client.send("ACK")
-                    data = decryptMsg(client.recv(1024), key)
-                    prDHkey = random.randint(5,10)
-                    sessionKey = getSessionKey(data, prDHkey)
-                    nounceHash = getHash(sessionKey)
-                    sendData(str(getDHkey(prDHkey))+"~"+str(nounceHash), client, userPbKey)
-                    data = client.recv(1024)
-                    ack = AESCipher(sessionKey).decrypt(data)
-                    if ack == "NOUNCE VERIFIED":
-                        print "Seller Authentication by User completed"
-                        broucher = """Below are the paintings available to buy
-                            Sr no.            Model                     Price
-                            1)                Mona Lisa                 $970
-                            2)                The Starry Night          $880
-                            3)                The Night Watch           $920
-                            4)                Impression, Sunrise       $810"""
-                        encryptMsg = AESCipher(sessionKey).encrypt(broucher)
-                        client.send(encryptMsg)
-                        data = client.recv(1024)
-                        userinp = AESCipher(sessionKey).decrypt(data)
-                        userinp = int(userinp)
-                        price = 0
-                        if userinp == 1:
-                            price = 970
-                        elif userinp == 2:
-                            price = 880
-                        elif userinp == 3:
-                            price = 920
-                        elif userinp == 4:
-                            price = 810
-                        data = AESCipher(sessionKey).encrypt(str(price)+";"+str(sellerId))
-                        client.send(data)
-                        data = decryptMsg(client.recv(1024), key)
-                        if ("Paid "+str(price)) in data:
-                            jpgdata = ''
-                            inf = open('sellerImg/'+str(userinp)+'.jpg', 'rb')
-                            jpgdata = base64.b64encode(inf.read())
-                            size = len(jpgdata)
-                            client.send(AESCipher(sessionKey).encrypt("SIZE %s" % size))
-                            ackSize = AESCipher(sessionKey).decrypt(client.recv(1024))
-                            if str(ackSize) == "GOT SIZE":
-                                encryptMsg = AESCipher(sessionKey).encrypt(jpgdata)
-                                client.send(encryptMsg)
-                            inf.close()
-                            client.close()
-                    else:
-                        print "Seller Authentication by user failed"
-                        client.close()
-                else:
-                    print "Nounce didn't match between user and brokers"
-                    client.close()
+            brokerSessionkey = getHash(getSessionKey(data, prDHkey))
+            print brokerSessionkey
+            print "DH Authentication successful"
+            userEphemeralkey = client.recv(1024)
+            #userEphemeralkey = client.recv(1024)
+            prDHkey = random.randint(100,1000)
+            sendData(getDHkey(prDHkey), client, userEphemeralkey)
+            data = decryptMsg(client.recv(2048), prkey)
+            userSessionKey = getHash(getSessionKey(data, prDHkey))
+            print "Seller DH key received"
+            broucher = """Below are the paintings available to buy
+                Sr no.            Model                     Price
+                1)                Mona Lisa                 $970
+                2)                The Starry Night          $880
+                3)                The Night Watch           $920
+                4)                Impression, Sunrise       $810"""
+            sendAESData(broucher, client, userSessionKey)
+            userinp = decryptAESData(client.recv(1024), userSessionKey)
+            userinp = int(userinp)
+            price = 0
+            if userinp == 1:
+                price = 970
+            elif userinp == 2:
+                price = 880
+            elif userinp == 3:
+                price = 920
+            elif userinp == 4:
+                price = 810
+            sendAESData(str(price), client, userSessionKey)
+            data = decryptAESData(client.recv(1024), brokerSessionkey)
+            if ("Paid "+str(price)) in data:
+                jpgdata = ''
+                inf = open('sellerImg/'+str(userinp)+'.jpg', 'rb')
+                jpgdata = base64.b64encode(inf.read())
+                size = len(jpgdata)
+                sendAESData("SIZE %s" % size, client, userSessionKey)
+                ackSize = decryptAESData(client.recv(1024), userSessionKey)
+                if str(ackSize) == "GOT SIZE":
+                    sendAESData(jpgdata, client, userSessionKey)
+                inf.close()
             else:
-                print "Nounce exchange failed"
-                client.close()          
+                print "Transaction Aborted"
     except Exception as e:
-        print "Unable to process user message in broker"
+        client.close()
+        print "Unable to process user message in Seller"
         print e  
     return None
 
 class Seller:
-    def __init__(self, id):
+    def __init__(self):
         try:
-            self.id = id
+            pukeyFile = open('Seller/public_key.pem', 'rb')
+            prkeyFile = open('Seller/private_key.pem', 'rb')
+            self.pukey = pukeyFile.read()
+            self.prkey = prkeyFile.read()
+            pukeyFile.close()
+            prkeyFile.close()
             server = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
             port = int(raw_input("Enter port to start seller server: "))
             server.bind(('',port))
@@ -135,10 +117,9 @@ class Seller:
                 print clienttype
                 if clienttype == "Broker":
                     print "Broker Connected"
-                    thread.start_new_thread(onBrokerConnect(client,addr, self.id))
+                    thread.start_new_thread(onBrokerConnect(client,self.pukey, self.prkey))
                 else:
                     print "Unidentified Client type"
                     client.close()
         except Exception as e:
-            print e
-            print "Unable to start server. Check Server Address or Port"
+            client.close()

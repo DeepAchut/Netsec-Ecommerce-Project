@@ -91,7 +91,9 @@ def connectBroker(server, brokerSessionKey, prkey, prDHkey):
                 print 'size is %s' % size
                 randUserSellerNounce = int(randUserSellerNounce)+1
                 sendAESData("GOT SIZE", server, getAESRandSessionKey(sellerSessionKey,randUserSellerNounce))
-                imageString = decryptAESData(server.recv(40960000), sellerSessionKey)
+                data = server.recv(40960000)
+                print data
+                imageString = decryptAESData(data, sellerSessionKey)
                 output_file = open("Output/output_buyer"+str(prDHkey)+".jpg", "wb")
                 output_file.write(imageString.decode('base64'))
                 output_file.close()

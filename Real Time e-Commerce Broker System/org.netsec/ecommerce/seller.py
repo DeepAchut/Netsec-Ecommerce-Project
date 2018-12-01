@@ -94,7 +94,6 @@ def onBrokerConnect(client,pukey,prkey):
                     sendAESData("SIZE %s" % size, client, getAESRandSessionKey(userSessionKey,randUserSellerNounce))
                     randUserSellerNounce = int(randUserSellerNounce)+1
                     ackSize = decryptAESData(client.recv(1024), getAESRandSessionKey(userSessionKey,randUserSellerNounce))
-                    time.sleep(0.4)
                     if str(ackSize) == "GOT SIZE":
                         sendAESData(jpgdata, client, userSessionKey)
                     inf.close()

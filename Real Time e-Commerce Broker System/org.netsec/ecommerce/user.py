@@ -93,11 +93,13 @@ def connectBroker(server, brokerSessionKey, prkey, prDHkey):
                 sendAESData("GOT SIZE", server, getAESRandSessionKey(sellerSessionKey,randUserSellerNounce))
                 data = server.recv(40960000)
                 print data
-                imageString = decryptAESData(data, sellerSessionKey)
+                randUserSellerNounce = int(randUserSellerNounce)+1
+                imageString = decryptAESData(data, getAESRandSessionKey(sellerSessionKey,randUserSellerNounce))
                 output_file = open("Output/output_buyer"+str(prDHkey)+".jpg", "wb")
                 output_file.write(imageString.decode('base64'))
                 output_file.close()
-                msg = decryptAESData(server.recv(1024), sellerSessionKey)
+                randUserSellerNounce = int(randUserSellerNounce)+1
+                msg = decryptAESData(server.recv(1024), getAESRandSessionKey(sellerSessionKey,randUserSellerNounce))
                 print msg
                 inp = raw_input("Press Y to continue else press N: ")
                 if inp.upper() != "Y":

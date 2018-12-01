@@ -95,9 +95,12 @@ def onBrokerConnect(client,pukey,prkey):
                     randUserSellerNounce = int(randUserSellerNounce)+1
                     ackSize = decryptAESData(client.recv(1024), getAESRandSessionKey(userSessionKey,randUserSellerNounce))
                     if str(ackSize) == "GOT SIZE":
-                        sendAESData(jpgdata, client, userSessionKey)
+                        randUserSellerNounce = int(randUserSellerNounce)+1
+                        sendAESData(jpgdata, client, getAESRandSessionKey(userSessionKey,randUserSellerNounce))
                     inf.close()
-                    sendAESData("Do you want to continue shopping?", client, userSessionKey)
+                    randUserSellerNounce = int(randUserSellerNounce)+1
+                    time.sleep(1)
+                    sendAESData("Do you want to continue shopping?", client, getAESRandSessionKey(userSessionKey,randUserSellerNounce))
                     data = decryptAESData(client.recv(2048), brokerSessionkey)
                     data = RSA.importKey(prkey).decrypt(eval(data))
                     if data == "N":

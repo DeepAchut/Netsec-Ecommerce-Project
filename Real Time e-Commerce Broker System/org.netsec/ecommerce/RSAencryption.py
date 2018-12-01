@@ -43,8 +43,9 @@ def sendData(msg, server, key):
     pukey = RSA.importKey(key)
     flag = False
     try:
-        dataToSend = pukey.encrypt((str(msg) + ";" + str(getHash(str(msg)))),32)
-        print dataToSend
+        data = (str(msg) + ";" + str(getHash(str(msg))))
+        print data
+        dataToSend = pukey.encrypt(data,32)
         server.send(b64encode(str(dataToSend)))
         flag = True
     except Exception as e:

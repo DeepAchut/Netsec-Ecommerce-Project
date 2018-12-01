@@ -50,10 +50,8 @@ def onBrokerConnect(client,pukey,prkey):
             print "Received Broker Public key"
             #Diffie-Hellman Key Exchange Starts here
             data = decryptMsg(client.recv(1024), prkey)
-            print data
             sendData(getDHkey(prDHkey), client, brokerPbKey)
             brokerSessionkey = getHash(getSessionKey(data, prDHkey))
-            print brokerSessionkey
             print "DH Authentication successful"
             userEphemeralkey = client.recv(1024)
             #userEphemeralkey = client.recv(1024)
@@ -94,13 +92,12 @@ def onBrokerConnect(client,pukey,prkey):
                     size = len(jpgdata)
                     randUserSellerNounce = int(randUserSellerNounce)+1
                     sendAESData("SIZE %s" % size, client, getAESRandSessionKey(userSessionKey,randUserSellerNounce))
-                    time.sleep(0.2)
                     randUserSellerNounce = int(randUserSellerNounce)+1
                     ackSize = decryptAESData(client.recv(1024), getAESRandSessionKey(userSessionKey,randUserSellerNounce))
+                    time.sleep(0.4)
                     if str(ackSize) == "GOT SIZE":
                         sendAESData(jpgdata, client, userSessionKey)
                     inf.close()
-                    time.sleep(0.3)
                     sendAESData("Do you want to continue shopping?", client, userSessionKey)
                     data = decryptAESData(client.recv(2048), brokerSessionkey)
                     data = RSA.importKey(prkey).decrypt(eval(data))

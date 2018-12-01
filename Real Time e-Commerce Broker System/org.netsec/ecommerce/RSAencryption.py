@@ -21,6 +21,7 @@ def decryptMsg(msg, key):
         prkey = RSA.importKey(key)
         en = eval(b64decode(msg))
         decrypt = prkey.decrypt(en)
+        print decrypt
         data = decrypt.split(";")[0]
         hash = decrypt.split(";")[1]
         if verifyMsg(data, hash):
@@ -43,6 +44,7 @@ def sendData(msg, server, key):
     flag = False
     try:
         dataToSend = pukey.encrypt((str(msg) + ";" + str(getHash(str(msg)))),32)
+        print dataToSend
         server.send(b64encode(str(dataToSend)))
         flag = True
     except Exception as e:

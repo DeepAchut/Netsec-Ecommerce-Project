@@ -26,6 +26,7 @@ def sendAESData(msg, server, nounce):
     try:
         hash = getHash(msg)
         data = str(msg) + ";" + str(hash)
+        print data
         encrypt = AESCipher(nounce).encrypt(data)
         send_msg(server,encrypt)
     except Exception as e:
@@ -46,6 +47,7 @@ def decryptAESData(sock, nounce):
     try:
         msg=recv_msg(sock)
         decrypt = AESCipher(nounce).decrypt(str(msg))
+        print decrypt
         data = decrypt.split(";")[0]
         hash = decrypt.split(";")[1]
         if verifyMsg(data, hash):

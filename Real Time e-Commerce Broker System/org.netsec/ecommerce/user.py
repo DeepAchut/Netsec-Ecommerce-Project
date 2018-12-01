@@ -12,11 +12,12 @@ import time
 from Crypto.PublicKey import RSA
 
 from AESCipher import sendAESData, decryptAESData
-from signature import signData
 from HashGenerator import getHash
 from RSAencryption import sendData, generateRSAkey, decryptMsg
 from diffiehellman import getDHkey
 from diffiehellman import getSessionKey
+from AESCipher import getAESRandSessionKey
+from signature import signData
 
 
 def exchangePublicKey(server, userPbKey):
@@ -55,10 +56,12 @@ def connectBroker(server, brokerSessionKey, prkey, prDHkey):
     sellerNounce = decryptMsg(server.recv(2048), userSellerPrkey)
     prDHKey = random.randint(100,1000)
     sendData(getDHkey(prDHKey), server, sellerPbKey)
-    sellerSessionKey = getHash(getSessionKey(sellerNounce, prDHKey))
+    randUserSellerNounce = getSessionKey(sellerNounce, prDHKey)
+    sellerSessionKey = getHash(randUserSellerNounce)
     rep = True
-    while rep:                    
-        broucher = decryptAESData(server.recv(1024), sellerSessionKey)
+    while rep:
+        randUserSellerNounce = int(randUserSellerNounce)+1                    
+        broucher = decryptAESData(server.recv(1024), getAESRandSessionKey(sellerSessionKey,randUserSellerNounce))
         print broucher
         inp = raw_input("Choose any product by its Serial Number: ")
         inpflag = False
@@ -68,22 +71,26 @@ def connectBroker(server, brokerSessionKey, prkey, prDHkey):
                 inp = raw_input("Choose any product by its Serial Number: ")
             else:
                 inpflag = True 
-        sendAESData(inp, server, sellerSessionKey)
-        price = decryptAESData(server.recv(1024), sellerSessionKey)
+        randUserSellerNounce = int(randUserSellerNounce)+1
+        sendAESData(inp, server, getAESRandSessionKey(sellerSessionKey,randUserSellerNounce))
+        randUserSellerNounce = int(randUserSellerNounce)+1
+        price = decryptAESData(server.recv(1024), getAESRandSessionKey(sellerSessionKey,randUserSellerNounce))
         print "Price of the product you want to buy is $" + str(price)
         inp = raw_input("Are you sure you want to buy? [Y/N]: ")
         dbTransact = str(price)
         sign = signData(dbTransact, prkey)
         if inp.upper() == "Y":
             sendAESData(dbTransact+"~"+sign, server, brokerSessionKey)
-            imgSize = decryptAESData(server.recv(1024), sellerSessionKey)
+            randUserSellerNounce = int(randUserSellerNounce)+1
+            imgSize = decryptAESData(server.recv(1024), getAESRandSessionKey(sellerSessionKey,randUserSellerNounce))
             print imgSize
             if imgSize.startswith('SIZE'):
                 tmp = imgSize.split()
                 size = int(tmp[1])
                 print 'got size'
                 print 'size is %s' % size
-                sendAESData("GOT SIZE", server, sellerSessionKey)
+                randUserSellerNounce = int(randUserSellerNounce)+1
+                sendAESData("GOT SIZE", server, getAESRandSessionKey(sellerSessionKey,randUserSellerNounce))
                 imageString = decryptAESData(server.recv(40960000), sellerSessionKey)
                 output_file = open("Output/output_buyer"+str(prDHkey)+".jpg", "wb")
                 output_file.write(imageString.decode('base64'))

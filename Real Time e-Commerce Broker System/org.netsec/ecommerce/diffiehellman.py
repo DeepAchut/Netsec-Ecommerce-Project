@@ -12,3 +12,5 @@ def getDHkey(prKey):
 
 def getSessionKey(compKey, prDHkey):
     return str(((int(compKey)**int(prDHkey))%p))
+
+        

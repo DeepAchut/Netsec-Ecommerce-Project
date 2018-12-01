@@ -17,6 +17,7 @@ from RSAencryption import decryptMsg
 from RSAencryption import sendData
 from diffiehellman import getSessionKey, getDHkey
 import threadCustom
+from AESCipher import getAESRandSessionKey
 
 
 def exchangeRSAPbKey(server,key):
@@ -59,7 +60,8 @@ def onBrokerConnect(client,pukey,prkey):
             prDHkey = random.randint(100,1000)
             sendData(getDHkey(prDHkey), client, userEphemeralkey)
             data = decryptMsg(client.recv(2048), prkey)
-            userSessionKey = getHash(getSessionKey(data, prDHkey))
+            randUserSellerNounce = getSessionKey(data, prDHkey)
+            userSessionKey = getHash(randUserSellerNounce)
             print "Seller DH key received"
             broucher = """Below are the paintings available to buy
                 Sr no.            Model                     Price
@@ -68,8 +70,10 @@ def onBrokerConnect(client,pukey,prkey):
                 3)                The Night Watch           $920
                 4)                Impression, Sunrise       $810"""
             while repeatFlag:
-                sendAESData(broucher, client, userSessionKey)
-                userinp = decryptAESData(client.recv(1024), userSessionKey)
+                randUserSellerNounce = int(randUserSellerNounce)+1
+                sendAESData(broucher, client, getAESRandSessionKey(userSessionKey,randUserSellerNounce))
+                randUserSellerNounce = int(randUserSellerNounce)+1
+                userinp = decryptAESData(client.recv(1024), getAESRandSessionKey(userSessionKey,randUserSellerNounce))
                 userinp = int(userinp)
                 price = 0
                 if userinp == 1:
@@ -80,19 +84,22 @@ def onBrokerConnect(client,pukey,prkey):
                     price = 920
                 elif userinp == 4:
                     price = 810
-                sendAESData(str(price), client, userSessionKey)
+                randUserSellerNounce = int(randUserSellerNounce)+1
+                sendAESData(str(price), client, getAESRandSessionKey(userSessionKey,randUserSellerNounce))
                 data = decryptAESData(client.recv(1024), brokerSessionkey)
                 if ("Paid "+str(price)) in data:
                     jpgdata = ''
                     inf = open('sellerImg/'+str(userinp)+'.jpg', 'rb')
                     jpgdata = base64.b64encode(inf.read())
                     size = len(jpgdata)
-                    sendAESData("SIZE %s" % size, client, userSessionKey)
-                    ackSize = decryptAESData(client.recv(1024), userSessionKey)
+                    randUserSellerNounce = int(randUserSellerNounce)+1
+                    sendAESData("SIZE %s" % size, client, getAESRandSessionKey(userSessionKey,randUserSellerNounce))
+                    randUserSellerNounce = int(randUserSellerNounce)+1
+                    ackSize = decryptAESData(client.recv(1024), getAESRandSessionKey(userSessionKey,randUserSellerNounce))
                     if str(ackSize) == "GOT SIZE":
                         sendAESData(jpgdata, client, userSessionKey)
                     inf.close()
-                    time.sleep(0.2)
+                    time.sleep(0.4)
                     sendAESData("Do you want to continue shopping?", client, userSessionKey)
                     data = decryptAESData(client.recv(2048), brokerSessionkey)
                     data = RSA.importKey(prkey).decrypt(eval(data))

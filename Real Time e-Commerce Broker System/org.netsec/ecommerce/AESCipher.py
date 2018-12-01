@@ -8,6 +8,11 @@ from Crypto.Cipher import AES
 
 from HashGenerator import getHash
 
+tempKey = 0
+
+def getAESRandSessionKey(sessionKey,randSessionKey):
+    tempKey = getHash(str(sessionKey)+str(randSessionKey))
+    return tempKey
 
 # Padding for the input string --not
 # related to encryption itself.
@@ -17,10 +22,9 @@ pad = lambda s: s + (BLOCK_SIZE - len(s) % BLOCK_SIZE) * \
 unpad = lambda s: s[:-ord(s[len(s) - 1:])]
 
 def sendAESData(msg, server, nounce):
-    rand = random.randint(1,10)
     try:
-        hash = getHash(msg+str(rand))
-        data = str(msg) + ";" + str(hash) + "~RND~" + str(rand)
+        hash = getHash(msg)
+        data = str(msg) + ";" + str(hash)
         encrypt = AESCipher(nounce).encrypt(data)
         server.send(encrypt)
     except Exception as e:
@@ -28,9 +32,9 @@ def sendAESData(msg, server, nounce):
         print e
     return 0
 
-def verifyMsg(data, hash, rand):
+def verifyMsg(data, hash):
     flag = False
-    if hash == getHash(data + rand):
+    if hash == getHash(data):
         flag = True
     else:
         flag = False
@@ -40,16 +44,16 @@ def decryptAESData(msg, nounce):
     rdata = ""
     try:
         decrypt = AESCipher(nounce).decrypt(str(msg))
-        rand = decrypt.split("~RND~")[1]
-        decrypt = decrypt.split("~RND~")[0]
         data = decrypt.split(";")[0]
         hash = decrypt.split(";")[1]
-        if verifyMsg(data, hash, rand):
+        if verifyMsg(data, hash):
             rdata = data
     except Exception as e:
         print "Unable to decrypt AES encrypted message"
         print e        
     return rdata
+
+
 
 class AESCipher:
     """

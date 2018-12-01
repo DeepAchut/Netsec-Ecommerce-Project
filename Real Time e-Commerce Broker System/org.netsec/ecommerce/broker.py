@@ -15,6 +15,7 @@ from RSAencryption import sendData
 from diffiehellman import getSessionKey, getDHkey
 from signature import verifySign
 import threadCustom
+from message import recv_msg, send_msg
 
 
 prDHkey = random.randint(100,1000)
@@ -64,7 +65,7 @@ def onUserConnect(client,userBrokerSessionKey, userPbKey, pukey, prkey):
     brokerFlag = True
     while brokerFlag:
         sellerFlag = True
-        ipadd = decryptAESData(client.recv(1024), userBrokerSessionKey)
+        ipadd = decryptAESData(client, userBrokerSessionKey)
         #DH Authentication Successful and Now can transmit messages
         #Now get Seller Ip address from the user and connect to the Seller
         print ipadd
@@ -93,13 +94,13 @@ def onUserConnect(client,userBrokerSessionKey, userPbKey, pukey, prkey):
             userDhkey = client.recv(1024)
             server.send(userDhkey)
             while sellerFlag:
-                broucher = server.recv(1024)
-                client.send(broucher)
-                userinp = client.recv(1024)
-                server.send(userinp)
-                price = server.recv(1024)
-                client.send(price)
-                data = decryptAESData(client.recv(2048), userBrokerSessionKey)
+                broucher = recv_msg(server)
+                send_msg(client,broucher)
+                userinp = recv_msg(client)
+                send_msg(server,userinp)
+                price =recv_msg(server)
+                send_msg(client,price)
+                data = decryptAESData(client, userBrokerSessionKey)
                 dbTransact = data.split("~")[0]
                 sign = data.split("~")[1]
                 date = str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
@@ -113,15 +114,11 @@ def onUserConnect(client,userBrokerSessionKey, userPbKey, pukey, prkey):
                         confFile.write("\n")
                         confFile.close()                                            
                         sendAESData("Paid "+str(price), server, sellerNounce)
-                        size = server.recv(1024)
-                        client.send(size)
-                        data = client.recv(1024)
-                        server.send(data)
-                        img = server.recv(40960000)
-                        client.send(img)
-                        repeatq = server.recv(1024)
-                        client.send(repeatq)
-                        data = decryptAESData(client.recv(2048), userBrokerSessionKey)
+                        img = recv_msg(server)
+                        send_msg(client,img)
+                        repeatq = recv_msg(server)
+                        send_msg(client,repeatq)
+                        data = decryptAESData(client, userBrokerSessionKey)
                         sendAESData(data.split(":B")[1], server, sellerNounce)
                         print data.split(":B")[0]
                         if data.split(":B")[0] == "broker":

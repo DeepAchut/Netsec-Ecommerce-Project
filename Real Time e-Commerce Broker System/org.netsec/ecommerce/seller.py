@@ -71,7 +71,7 @@ def onBrokerConnect(client,pukey,prkey):
                 randUserSellerNounce = int(randUserSellerNounce)+1
                 sendAESData(broucher, client, getAESRandSessionKey(userSessionKey,randUserSellerNounce))
                 randUserSellerNounce = int(randUserSellerNounce)+1
-                userinp = decryptAESData(client.recv(1024), getAESRandSessionKey(userSessionKey,randUserSellerNounce))
+                userinp = decryptAESData(client, getAESRandSessionKey(userSessionKey,randUserSellerNounce))
                 userinp = int(userinp)
                 price = 0
                 if userinp == 1:
@@ -84,24 +84,19 @@ def onBrokerConnect(client,pukey,prkey):
                     price = 810
                 randUserSellerNounce = int(randUserSellerNounce)+1
                 sendAESData(str(price), client, getAESRandSessionKey(userSessionKey,randUserSellerNounce))
-                data = decryptAESData(client.recv(1024), brokerSessionkey)
+                data = decryptAESData(client, brokerSessionkey)
                 if ("Paid "+str(price)) in data:
                     jpgdata = ''
                     inf = open('sellerImg/'+str(userinp)+'.jpg', 'rb')
                     jpgdata = base64.b64encode(inf.read())
                     size = len(jpgdata)
                     randUserSellerNounce = int(randUserSellerNounce)+1
-                    sendAESData("SIZE %s" % size, client, getAESRandSessionKey(userSessionKey,randUserSellerNounce))
-                    randUserSellerNounce = int(randUserSellerNounce)+1
-                    ackSize = decryptAESData(client.recv(1024), getAESRandSessionKey(userSessionKey,randUserSellerNounce))
-                    if str(ackSize) == "GOT SIZE":
-                        randUserSellerNounce = int(randUserSellerNounce)+1
-                        sendAESData(jpgdata, client, getAESRandSessionKey(userSessionKey,randUserSellerNounce))
+                    sendAESData(jpgdata, client, getAESRandSessionKey(userSessionKey,randUserSellerNounce))
                     inf.close()
                     randUserSellerNounce = int(randUserSellerNounce)+1
                     time.sleep(1)
                     sendAESData("Do you want to continue shopping?", client, getAESRandSessionKey(userSessionKey,randUserSellerNounce))
-                    data = decryptAESData(client.recv(2048), brokerSessionkey)
+                    data = decryptAESData(client, brokerSessionkey)
                     data = RSA.importKey(prkey).decrypt(eval(data))
                     if data == "N":
                         repeatFlag = False

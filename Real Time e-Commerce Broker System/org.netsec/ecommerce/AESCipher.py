@@ -1,12 +1,13 @@
 from base64 import b64decode
 from base64 import b64encode
 from hashlib import md5
-import random
 
 from Crypto import Random
 from Crypto.Cipher import AES
 
 from HashGenerator import getHash
+from message import recv_msg,send_msg
+
 
 tempKey = 0
 
@@ -26,7 +27,7 @@ def sendAESData(msg, server, nounce):
         hash = getHash(msg)
         data = str(msg) + ";" + str(hash)
         encrypt = AESCipher(nounce).encrypt(data)
-        server.send(encrypt)
+        send_msg(server,encrypt)
     except Exception as e:
         print "Unable to send AES encrypted data"
         print e
@@ -40,9 +41,10 @@ def verifyMsg(data, hash):
         flag = False
     return flag
 
-def decryptAESData(msg, nounce):
+def decryptAESData(sock, nounce):
     rdata = ""
     try:
+        msg=recv_msg(sock)
         decrypt = AESCipher(nounce).decrypt(str(msg))
         data = decrypt.split(";")[0]
         hash = decrypt.split(";")[1]

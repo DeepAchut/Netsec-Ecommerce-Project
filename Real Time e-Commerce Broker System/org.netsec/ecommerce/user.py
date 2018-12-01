@@ -61,7 +61,7 @@ def connectBroker(server, brokerSessionKey, prkey, prDHkey):
     rep = True
     while rep:
         randUserSellerNounce = int(randUserSellerNounce)+1                    
-        broucher = decryptAESData(server.recv(1024), getAESRandSessionKey(sellerSessionKey,randUserSellerNounce))
+        broucher = decryptAESData(server, getAESRandSessionKey(sellerSessionKey,randUserSellerNounce))
         print broucher
         inp = raw_input("Choose any product by its Serial Number: ")
         inpflag = False
@@ -74,7 +74,7 @@ def connectBroker(server, brokerSessionKey, prkey, prDHkey):
         randUserSellerNounce = int(randUserSellerNounce)+1
         sendAESData(inp, server, getAESRandSessionKey(sellerSessionKey,randUserSellerNounce))
         randUserSellerNounce = int(randUserSellerNounce)+1
-        price = decryptAESData(server.recv(1024), getAESRandSessionKey(sellerSessionKey,randUserSellerNounce))
+        price = decryptAESData(server, getAESRandSessionKey(sellerSessionKey,randUserSellerNounce))
         print "Price of the product you want to buy is $" + str(price)
         inp = raw_input("Are you sure you want to buy? [Y/N]: ")
         dbTransact = str(price)
@@ -82,45 +82,30 @@ def connectBroker(server, brokerSessionKey, prkey, prDHkey):
         if inp.upper() == "Y":
             sendAESData(dbTransact+"~"+sign, server, brokerSessionKey)
             randUserSellerNounce = int(randUserSellerNounce)+1
-            imgSize = decryptAESData(server.recv(1024), getAESRandSessionKey(sellerSessionKey,randUserSellerNounce))
-            print imgSize
-            if imgSize.startswith('SIZE'):
-                tmp = imgSize.split()
-                size = int(tmp[1])
-                print 'got size'
-                print 'size is %s' % size
-                randUserSellerNounce = int(randUserSellerNounce)+1
-                sendAESData("GOT SIZE", server, getAESRandSessionKey(sellerSessionKey,randUserSellerNounce))
-                data = server.recv(40960000)
-                print data
-                randUserSellerNounce = int(randUserSellerNounce)+1
-                imageString = decryptAESData(data, getAESRandSessionKey(sellerSessionKey,randUserSellerNounce))
-                output_file = open("Output/output_buyer"+str(prDHkey)+".jpg", "wb")
-                output_file.write(imageString.decode('base64'))
-                output_file.close()
-                randUserSellerNounce = int(randUserSellerNounce)+1
-                msg = decryptAESData(server.recv(1024), getAESRandSessionKey(sellerSessionKey,randUserSellerNounce))
-                print msg
-                inp = raw_input("Press Y to continue else press N: ")
+            imageString = decryptAESData(server, getAESRandSessionKey(sellerSessionKey,randUserSellerNounce))
+            output_file = open("Output/output_buyer"+str(random.randint(10,1000))+".jpg", "wb")
+            output_file.write(imageString.decode('base64'))
+            output_file.close()
+            randUserSellerNounce = int(randUserSellerNounce)+1
+            msg = decryptAESData(server, getAESRandSessionKey(sellerSessionKey,randUserSellerNounce))
+            print msg
+            inp = raw_input("Press Y to continue else press N: ")
+            if inp.upper() != "Y":
+                rep = False
+                inp = raw_input("Do you want to connect another seller [Y/N]: ")
                 if inp.upper() != "Y":
-                    rep = False
-                    inp = raw_input("Do you want to connect another seller [Y/N]: ")
-                    if inp.upper() != "Y":
-                        flag = False
-                        print "Bye!"
-                        add = RSA.importKey(sellerPbKey).encrypt("N",32)
-                        sendAESData("quit:B"+str(add), server, brokerSessionKey)
-                    else:
-                        add = RSA.importKey(sellerPbKey).encrypt("N",32)
-                        data = "broker:B"+str(add)
-                        sendAESData(data, server, brokerSessionKey)                        
+                    flag = False
+                    print "Bye!"
+                    add = RSA.importKey(sellerPbKey).encrypt("N",32)
+                    sendAESData("quit:B"+str(add), server, brokerSessionKey)
                 else:
-                    add = RSA.importKey(sellerPbKey).encrypt("Y",32)
-                    data = "seller:B"+str(add)
-                    sendAESData(data, server, brokerSessionKey)
+                    add = RSA.importKey(sellerPbKey).encrypt("N",32)
+                    data = "broker:B"+str(add)
+                    sendAESData(data, server, brokerSessionKey)                        
             else:
-                print "Error in getting image size"
-                server.close()
+                add = RSA.importKey(sellerPbKey).encrypt("Y",32)
+                data = "seller:B"+str(add)
+                sendAESData(data, server, brokerSessionKey)
         else:
             sendData("No Purchase", server, prkey)
     return flag

@@ -7,12 +7,16 @@ import base64
 import random
 import socket
 import thread
+import time
 
+from Crypto.PublicKey import RSA
+
+from AESCipher import sendAESData, decryptAESData
 from HashGenerator import getHash
 from RSAencryption import decryptMsg
 from RSAencryption import sendData
 from diffiehellman import getSessionKey, getDHkey
-from AESCipher import sendAESData, decryptAESData
+import threadCustom
 
 
 def exchangeRSAPbKey(server,key):
@@ -37,6 +41,7 @@ def exchangeRSAPbKey(server,key):
     return senderkey
 
 def onBrokerConnect(client,pukey,prkey):
+    repeatFlag = True
     try:
         brokerPbKey = exchangeRSAPbKey(client, pukey)
         prDHkey = random.randint(100,1000)
@@ -62,32 +67,41 @@ def onBrokerConnect(client,pukey,prkey):
                 2)                The Starry Night          $880
                 3)                The Night Watch           $920
                 4)                Impression, Sunrise       $810"""
-            sendAESData(broucher, client, userSessionKey)
-            userinp = decryptAESData(client.recv(1024), userSessionKey)
-            userinp = int(userinp)
-            price = 0
-            if userinp == 1:
-                price = 970
-            elif userinp == 2:
-                price = 880
-            elif userinp == 3:
-                price = 920
-            elif userinp == 4:
-                price = 810
-            sendAESData(str(price), client, userSessionKey)
-            data = decryptAESData(client.recv(1024), brokerSessionkey)
-            if ("Paid "+str(price)) in data:
-                jpgdata = ''
-                inf = open('sellerImg/'+str(userinp)+'.jpg', 'rb')
-                jpgdata = base64.b64encode(inf.read())
-                size = len(jpgdata)
-                sendAESData("SIZE %s" % size, client, userSessionKey)
-                ackSize = decryptAESData(client.recv(1024), userSessionKey)
-                if str(ackSize) == "GOT SIZE":
-                    sendAESData(jpgdata, client, userSessionKey)
-                inf.close()
-            else:
-                print "Transaction Aborted"
+            while repeatFlag:
+                sendAESData(broucher, client, userSessionKey)
+                userinp = decryptAESData(client.recv(1024), userSessionKey)
+                userinp = int(userinp)
+                price = 0
+                if userinp == 1:
+                    price = 970
+                elif userinp == 2:
+                    price = 880
+                elif userinp == 3:
+                    price = 920
+                elif userinp == 4:
+                    price = 810
+                sendAESData(str(price), client, userSessionKey)
+                data = decryptAESData(client.recv(1024), brokerSessionkey)
+                if ("Paid "+str(price)) in data:
+                    jpgdata = ''
+                    inf = open('sellerImg/'+str(userinp)+'.jpg', 'rb')
+                    jpgdata = base64.b64encode(inf.read())
+                    size = len(jpgdata)
+                    sendAESData("SIZE %s" % size, client, userSessionKey)
+                    ackSize = decryptAESData(client.recv(1024), userSessionKey)
+                    if str(ackSize) == "GOT SIZE":
+                        sendAESData(jpgdata, client, userSessionKey)
+                    inf.close()
+                    time.sleep(0.2)
+                    sendAESData("Do you want to continue shopping?", client, userSessionKey)
+                    data = decryptAESData(client.recv(2048), brokerSessionkey)
+                    data = RSA.importKey(prkey).decrypt(eval(data))
+                    if data == "N":
+                        repeatFlag = False
+                        print "Closing connection"
+                        client.close()
+                else:
+                    print "Transaction Aborted"
     except Exception as e:
         client.close()
         print "Unable to process user message in Seller"
@@ -117,7 +131,8 @@ class Seller:
                 print clienttype
                 if clienttype == "Broker":
                     print "Broker Connected"
-                    thread.start_new_thread(onBrokerConnect(client,self.pukey, self.prkey))
+                    onBrokerConnect(client,self.pukey,self.prkey)
+                    server.close()
                 else:
                     print "Unidentified Client type"
                     client.close()

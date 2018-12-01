@@ -9,8 +9,10 @@ import random
 import socket
 import time
 
+from Crypto.PublicKey import RSA
+
 from AESCipher import sendAESData, decryptAESData
-from AESsignature import signData
+from signature import signData
 from HashGenerator import getHash
 from RSAencryption import sendData, generateRSAkey, decryptMsg
 from diffiehellman import getDHkey
@@ -37,7 +39,8 @@ def exchangePublicKey(server, userPbKey):
         print e
     return key
 
-def connectBroker(server, brokerSessionKey, pukey, prkey, brokerPbKey):
+def connectBroker(server, brokerSessionKey, prkey, prDHkey):
+    flag = True
     inp = raw_input("Enter the Seller IP address & port (format:-ipaddress:port): ")
     sendAESData(inp, server, brokerSessionKey)
     sellerPbKey = server.recv(1024)
@@ -48,45 +51,73 @@ def connectBroker(server, brokerSessionKey, pukey, prkey, brokerPbKey):
     userSellerPrkey = userSellerkey.exportKey()
     #sendData(str(userSellerPbkey), server, sellerPbKey)
     server.send(userSellerPbkey)
-    time.sleep(0.5)
+    time.sleep(0.1)
     sellerNounce = decryptMsg(server.recv(2048), userSellerPrkey)
     prDHKey = random.randint(100,1000)
     sendData(getDHkey(prDHKey), server, sellerPbKey)
-    sellerSessionKey = getHash(getSessionKey(sellerNounce, prDHKey))                    
-    broucher = decryptAESData(server.recv(1024), sellerSessionKey)
-    print broucher
-    inp = raw_input("Press the number to select any product: ")
-    sendAESData(inp, server, sellerSessionKey)
-    price = decryptAESData(server.recv(1024), sellerSessionKey)
-    print "Price of the product you want to buy is $" + str(price)
-    inp = raw_input("Are you sure you want to buy? [Y/N]: ")
-    dbTransact = str(price)
-    sign = signData(dbTransact, prkey)
-    if inp == "Y":
-        sendAESData(dbTransact+"~"+sign, server, brokerSessionKey)
-        imgSize = decryptAESData(server.recv(1024), sellerSessionKey)
-        print imgSize
-        if imgSize.startswith('SIZE'):
-            tmp = imgSize.split()
-            size = int(tmp[1])
-            print 'got size'
-            print 'size is %s' % size
-            sendAESData("GOT SIZE", server, sellerSessionKey)
-            imageString = decryptAESData(server.recv(40960000), sellerSessionKey)
-            output_file = open("Output/output_buyer.jpg", "wb")
-            output_file.write(imageString.decode('base64'))
-            output_file.close()
-            print "Transaction completed successfully. Hope to see you soon again"
+    sellerSessionKey = getHash(getSessionKey(sellerNounce, prDHKey))
+    rep = True
+    while rep:                    
+        broucher = decryptAESData(server.recv(1024), sellerSessionKey)
+        print broucher
+        inp = raw_input("Choose any product by its Serial Number: ")
+        inpflag = False
+        while inpflag == False:
+            if(int(inp) > 4 or int(inp) < 1):
+                print "Invalid Input. Try again" 
+                inp = raw_input("Choose any product by its Serial Number: ")
+            else:
+                inpflag = True 
+        sendAESData(inp, server, sellerSessionKey)
+        price = decryptAESData(server.recv(1024), sellerSessionKey)
+        print "Price of the product you want to buy is $" + str(price)
+        inp = raw_input("Are you sure you want to buy? [Y/N]: ")
+        dbTransact = str(price)
+        sign = signData(dbTransact, prkey)
+        if inp.upper() == "Y":
+            sendAESData(dbTransact+"~"+sign, server, brokerSessionKey)
+            imgSize = decryptAESData(server.recv(1024), sellerSessionKey)
+            print imgSize
+            if imgSize.startswith('SIZE'):
+                tmp = imgSize.split()
+                size = int(tmp[1])
+                print 'got size'
+                print 'size is %s' % size
+                sendAESData("GOT SIZE", server, sellerSessionKey)
+                imageString = decryptAESData(server.recv(40960000), sellerSessionKey)
+                output_file = open("Output/output_buyer"+str(prDHkey)+".jpg", "wb")
+                output_file.write(imageString.decode('base64'))
+                output_file.close()
+                msg = decryptAESData(server.recv(1024), sellerSessionKey)
+                print msg
+                inp = raw_input("Press Y to continue else press N: ")
+                if inp.upper() != "Y":
+                    rep = False
+                    inp = raw_input("Do you want to connect another seller [Y/N]: ")
+                    if inp.upper() != "Y":
+                        flag = False
+                        print "Bye!"
+                        add = RSA.importKey(sellerPbKey).encrypt("N",32)
+                        sendAESData("quit:B"+str(add), server, brokerSessionKey)
+                    else:
+                        add = RSA.importKey(sellerPbKey).encrypt("N",32)
+                        data = "broker:B"+str(add)
+                        sendAESData(data, server, brokerSessionKey)                        
+                else:
+                    add = RSA.importKey(sellerPbKey).encrypt("Y",32)
+                    data = "seller:B"+str(add)
+                    sendAESData(data, server, brokerSessionKey)
+            else:
+                print "Error in getting image size"
+                server.close()
         else:
-            print "Error in getting image size"
-            server.close()
-    else:
-        sendData("No Purchase", server, prkey)
-    return None
+            sendData("No Purchase", server, prkey)
+    return flag
     
 class User:
     def __init__(self,ip,port):
         try:
+            flag = True
             pukeyFile = open('User/public_key.pem', 'rb')
             prkeyFile = open('User/private_key.pem', 'rb')
             self.pukey = pukeyFile.read()
@@ -108,7 +139,8 @@ class User:
                 brokerSessionKey = getSessionKey(data, prDHKey)
                 brokerSessionKey = getHash(brokerSessionKey)
                 print "DH Authentication successful"    
-                connectBroker(server, brokerSessionKey, self.pukey, self.prkey, brokerPbKey)
+                while flag:
+                    flag = connectBroker(server, brokerSessionKey, self.prkey, prDHKey)
             else:
                 print "Issue in broker key"
         except Exception as e:

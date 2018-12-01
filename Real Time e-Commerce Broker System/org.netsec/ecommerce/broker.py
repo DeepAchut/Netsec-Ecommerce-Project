@@ -4,19 +4,17 @@ Created on 06-Nov-2018
 @author: deepk
 '''
 import datetime
-import os
 import random
 import socket
-import thread
-import time
 
 from AESCipher import decryptAESData
 from AESCipher import sendAESData
-from AESsignature import verifySign
 from HashGenerator import getHash
 from RSAencryption import decryptMsg
 from RSAencryption import sendData
 from diffiehellman import getSessionKey, getDHkey
+from signature import verifySign
+import threadCustom
 
 
 prDHkey = random.randint(100,1000)
@@ -62,16 +60,18 @@ def exchangeSellerRSAPbKey(server,key):
         print e
     return senderkey
 
-def onUserConnect(client,userBrokerNounce, userPbKey, pukey, prkey):
-    try:
-        ipadd = decryptAESData(client.recv(1024), userBrokerNounce)
+def onUserConnect(client,userBrokerSessionKey, userPbKey, pukey, prkey):
+    brokerFlag = True
+    while brokerFlag:
+        sellerFlag = True
+        ipadd = decryptAESData(client.recv(1024), userBrokerSessionKey)
         #DH Authentication Successful and Now can transmit messages
         #Now get Seller Ip address from the user and connect to the Seller
         print ipadd
         server = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         port = int(ipadd.split(":")[1])
         server.connect((ipadd.split(":")[0],port))
-        server.send("Broker") 
+        server.send("Broker")
         sellerPbKey = exchangeSellerRSAPbKey(server, pukey)
         print "Seller Pb Key received"
         print sellerPbKey
@@ -92,38 +92,50 @@ def onUserConnect(client,userBrokerNounce, userPbKey, pukey, prkey):
             client.send(sellerDhKey)
             userDhkey = client.recv(1024)
             server.send(userDhkey)
-            broucher = server.recv(1024)
-            client.send(broucher)
-            userinp = client.recv(1024)
-            server.send(userinp)
-            price = server.recv(1024)
-            client.send(price)
-            data = decryptAESData(client.recv(2048), userBrokerNounce)
-            dbTransact = data.split("~")[0]
-            sign = data.split("~")[1]
-            date = str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-            if "No Purchase" not in data and verifySign(dbTransact, userPbKey, sign):
-                print "User authenticated Seller"
-                price = dbTransact.split(";")[0]
-                if price:
-                    confFile = open(os.path.join(os.path.abspath('paymentDB'),"payment.csv"), "a")
-                    data = str(getHash(pukey)+";"+dbTransact+";"+date+";"+sign+";"+sellerPbKey)
-                    confFile.write(data.replace(";",","))
-                    confFile.write("\n")
-                    confFile.close()                                            
-                    sendAESData("Paid "+str(price), server, sellerNounce)
-                    size = server.recv(1024)
-                    client.send(size)
-                    data = client.recv(1024)
-                    server.send(data)
-                    img = server.recv(40960000)
-                    client.send(img)
-            else:
-                print "Purchase Aborted. Closing the Servers"
-    except Exception as e:
-        client.close()
-        print "Unable to process user message in broker"
-        print e
+            while sellerFlag:
+                broucher = server.recv(1024)
+                client.send(broucher)
+                userinp = client.recv(1024)
+                server.send(userinp)
+                price = server.recv(1024)
+                client.send(price)
+                data = decryptAESData(client.recv(2048), userBrokerSessionKey)
+                dbTransact = data.split("~")[0]
+                sign = data.split("~")[1]
+                date = str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                if "No Purchase" not in data and verifySign(dbTransact, userPbKey, sign):
+                    print "User authenticated Seller"
+                    price = dbTransact.split(";")[0]
+                    if price:
+                        confFile = open("paymentDB/payment.csv", "a")
+                        data = str(getHash(pukey)+";"+dbTransact+";"+date+";"+sign+";"+sellerPbKey)
+                        confFile.write(data.replace(";",","))
+                        confFile.write("\n")
+                        confFile.close()                                            
+                        sendAESData("Paid "+str(price), server, sellerNounce)
+                        size = server.recv(1024)
+                        client.send(size)
+                        data = client.recv(1024)
+                        server.send(data)
+                        img = server.recv(40960000)
+                        client.send(img)
+                        repeatq = server.recv(1024)
+                        client.send(repeatq)
+                        data = decryptAESData(client.recv(2048), userBrokerSessionKey)
+                        sendAESData(data.split(":B")[1], server, sellerNounce)
+                        print data.split(":B")[0]
+                        if data.split(":B")[0] == "broker":
+                            print "Ending connection with seller"
+                            sellerFlag = False
+                        elif data.split(":B")[0] == "quit":
+                            sellerFlag = False
+                            brokerFlag = False
+                        else:
+                            print "Continuing connection with seller"
+                else:
+                    print "Purchase Aborted."
+                    server.close()
+                    client.close()
     return None
 
 class Broker:
@@ -139,23 +151,29 @@ class Broker:
             port = int(raw_input("Enter port to start broker server: "))
             server.bind(('',port))
             print "socket binded to %s" %(port)
-            server.listen(5)
-            print "socket is listening"
+            threads = []
             while True:
+                server.listen(4)
+                print "socket is listening"
                 # Establish connection with client. 
                 client, addr = server.accept()
                 print 'Got connection from', addr
                 clienttype = client.recv(4096)
                 print clienttype
                 if clienttype == "User":
+                    clienttype = ""
                     print "User Connected"
                     userPbKey = exchangeUserRSAPbKey(client, self.pukey)
                     if userPbKey:
                         #Diffie-Hellman Key Exchange Starts here
                         data = decryptMsg(client.recv(1024), self.prkey)
                         sendData(getDHkey(prDHkey), client, userPbKey)
-                        userBrokerNounce = getSessionKey(data, prDHkey)
-                        userBrokerNounce = getHash(userBrokerNounce)                                                                              
-                        thread.start_new_thread(onUserConnect(client, userBrokerNounce, userPbKey, self.pukey, self.prkey))
+                        userBrokerSessionKey = getSessionKey(data, prDHkey)
+                        userBrokerSessionKey = getHash(userBrokerSessionKey)
+                        twrv = threadCustom.CustomThread(target=onUserConnect, args=(client, userBrokerSessionKey, userPbKey, self.pukey, self.prkey))
+                        twrv.start()
+                        threads.append(twrv)
+            for t in threads: 
+                t.join() 
         except Exception as e:
             client.close()
